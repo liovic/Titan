@@ -2,12 +2,12 @@ use {
     super::{address::AddressUpdater, cache::UpdaterCache},
     crate::{
         index::{Settings, StoreError},
-        models::{BlockId, TransactionStateChange},
+        models::{BlockId, TransactionStateChange, TxOutEntry},
     },
     bitcoin::{OutPoint, Transaction, Txid},
     ordinals::RuneId,
     thiserror::Error,
-    titan_types::{Event, TxOutEntry},
+    titan_types::Event,
     tokio::sync::mpsc::error::SendError,
 };
 

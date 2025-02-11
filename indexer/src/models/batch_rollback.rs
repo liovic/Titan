@@ -1,9 +1,9 @@
 use {
-    super::RuneEntry,
+    super::{RuneEntry, TxOutEntry},
     bitcoin::{OutPoint, ScriptBuf, Txid},
     ordinals::{Rune, RuneId},
     std::{collections::HashMap, fmt::Display},
-    titan_types::{InscriptionId, TxOutEntry},
+    titan_types::InscriptionId,
 };
 
 pub struct BatchRollback {

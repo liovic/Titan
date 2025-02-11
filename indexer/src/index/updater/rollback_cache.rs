@@ -1,12 +1,12 @@
 use {
     crate::{
         index::{store::Store, StoreError},
-        models::{BatchRollback, RuneEntry},
+        models::{BatchRollback, RuneEntry, TxOutEntry},
     },
     bitcoin::{OutPoint, ScriptBuf, Txid},
     ordinals::{Rune, RuneId},
     std::{collections::HashMap, sync::Arc},
-    titan_types::{InscriptionId, TxOutEntry},
+    titan_types::InscriptionId,
     tracing::info,
 };
 

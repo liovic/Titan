@@ -1,7 +1,6 @@
 use {
     crate::rune::RuneAmount,
     bitcoin::{BlockHash, ScriptBuf, TxIn, Txid},
-    borsh::{BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
 
@@ -71,15 +70,8 @@ pub struct TxOut {
     pub runes: Vec<RuneAmount>,
 }
 
-#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
-pub struct TxOutEntry {
+pub struct TxOutResponse {
     pub runes: Vec<RuneAmount>,
     pub value: u64,
     pub spent: bool,
-}
-
-impl TxOutEntry {
-    pub fn has_runes(&self) -> bool {
-        !self.runes.is_empty()
-    }
 }

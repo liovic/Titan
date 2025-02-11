@@ -3,7 +3,7 @@ use {
         db::{RocksDB, RocksDBError},
         models::{
             BatchDelete, BatchRollback, BatchUpdate, BlockId, Inscription, RuneEntry,
-            TransactionStateChange,
+            TransactionStateChange, TxOutEntry,
         },
     },
     bitcoin::{consensus, hex::HexToArrayError, BlockHash, OutPoint, ScriptBuf, Txid},
@@ -12,7 +12,6 @@ use {
     thiserror::Error,
     titan_types::{
         Block, InscriptionId, Pagination, PaginationResponse, Transaction, TransactionStatus,
-        TxOutEntry,
     },
 };
 

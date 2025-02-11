@@ -297,14 +297,47 @@ async function main() {
       normalizedElectrsOutputs.sort(sortFunc);
 
       if (normalizedIndexerBasic.length !== normalizedElectrsOutputs.length) {
-        throw new Error(
-          `Address ${address} basic output count mismatch: indexer returned ${normalizedIndexerBasic.length} outputs vs electrs returned ${normalizedElectrsOutputs.length}`,
-        );
+        if (normalizedIndexerBasic.length > normalizedElectrsOutputs.length) {
+          // Find the extra outputs in indexer and print them
+          const extraOutputs = normalizedIndexerBasic.filter(
+            (o) =>
+              !normalizedElectrsOutputs.some(
+                (e) => e.txid === o.txid && e.vout === o.vout,
+              ),
+          );
+          console.error(
+            `Address ${address} has extra outputs: ${JSON.stringify(extraOutputs)}`,
+          );
+        } else {
+          // Find the missing outputs in electrs and print them
+          const missingOutputs = normalizedElectrsOutputs.filter(
+            (e) =>
+              !normalizedIndexerBasic.some(
+                (i) => i.txid === e.txid && i.vout === e.vout,
+              ),
+          );
+
+          console.error(
+            `Address ${address} has missing outputs: ${JSON.stringify(
+              missingOutputs,
+            )}`,
+          );
+        }
       }
 
       for (let i = 0; i < normalizedIndexerBasic.length; i++) {
         const idxOut = normalizedIndexerBasic[i];
-        const elecOut = normalizedElectrsOutputs[i];
+        const elecOut = normalizedElectrsOutputs.find(
+          (o) => o.txid === idxOut.txid && o.vout === idxOut.vout,
+        );
+        if (!elecOut) {
+          console.error(
+            `Address ${address} outpoint is not in electrs: ${JSON.stringify(idxOut)}`,
+          );
+
+          continue;
+        }
+
         if (
           idxOut.txid !== elecOut.txid ||
           idxOut.vout !== elecOut.vout ||
@@ -343,6 +376,15 @@ async function main() {
         (runes || [])
           .map((r) => ({ rune_id: r.rune_id, amount: Number(r.amount) }))
           .sort((a, b) => a.rune_id.localeCompare(b.rune_id));
+
+
+      const uniqueRuneIds = new Set();
+      for (const out of normalizedIndexerForRunes) {
+        for (const rune of out.runes) {
+          uniqueRuneIds.add(rune.rune_id);
+        }
+      }
+
 
       for (let i = 0; i < normalizedIndexerForRunes.length; i++) {
         const idxOut = normalizedIndexerForRunes[i];

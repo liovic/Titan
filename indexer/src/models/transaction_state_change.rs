@@ -1,5 +1,5 @@
 use {
-    super::Lot,
+    super::{Lot, RuneAmount, TxOutEntry},
     bitcoin::{hashes::Hash, OutPoint},
     borsh::{BorshDeserialize, BorshSerialize},
     ordinals::{Rune, RuneId},
@@ -8,7 +8,6 @@ use {
         fmt::Display,
         io::{Read, Result, Write},
     },
-    titan_types::{RuneAmount, TxOutEntry},
 };
 
 #[derive(Debug, Clone)]

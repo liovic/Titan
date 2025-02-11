@@ -1,12 +1,12 @@
 use {
-    super::{BlockId, Inscription, RuneEntry, TransactionStateChange},
+    super::{BlockId, Inscription, RuneEntry, TransactionStateChange, TxOutEntry},
     bitcoin::{BlockHash, OutPoint, ScriptBuf, Transaction, Txid},
     ordinals::RuneId,
     std::{
         collections::{HashMap, HashSet},
         fmt::Display,
     },
-    titan_types::{Block, InscriptionId, TxOutEntry},
+    titan_types::{Block, InscriptionId},
 };
 
 #[derive(Debug, Clone)]

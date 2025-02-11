@@ -4,6 +4,7 @@ use {
         index::{store::StoreError, Settings},
         models::{
             BatchDelete, BatchUpdate, BlockId, Inscription, RuneEntry, TransactionStateChange,
+            TxOutEntry,
         },
     },
     bitcoin::{consensus, BlockHash, OutPoint, ScriptBuf, Transaction, Txid},
@@ -15,7 +16,7 @@ use {
         sync::Arc,
         time::Instant,
     },
-    titan_types::{Block, Event, InscriptionId, Location, TxOutEntry},
+    titan_types::{Block, Event, InscriptionId, Location},
     tokio::sync::mpsc,
     tracing::{info, trace},
 };

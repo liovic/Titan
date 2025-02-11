@@ -4,15 +4,17 @@ use {
         query::{to_hash, to_rune_id},
     },
     crate::{
-        index::{Index, IndexError, StoreError},
+        index::{Index, IndexError},
         subscription::{self, WebhookSubscriptionManager},
     },
     bitcoin::{consensus, Address, OutPoint, Txid},
     bitcoincore_rpc::{Client, RpcApi},
     http::HeaderMap,
-    std::sync::Arc,
+    std::{collections::HashSet, sync::Arc},
     titan_types::{
-        query, AddressData, Block, BlockTip, InscriptionId, Pagination, PaginationResponse, RuneResponse, Status, Subscription, Transaction, TransactionStatus, TxOutEntry
+        query::{self, RuneUnit},
+        AddressData, Block, BlockTip, InscriptionId, Pagination, PaginationResponse, RuneResponse,
+        Status, Subscription, Transaction, TransactionStatus, TxOutResponse,
     },
     tracing::error,
     uuid::Uuid,
@@ -74,7 +76,7 @@ pub fn block_txids(index: Arc<Index>, block: &query::Block) -> Result<Vec<String
     Ok(block.tx_ids)
 }
 
-pub fn output(index: Arc<Index>, outpoint: &OutPoint) -> Result<TxOutEntry> {
+pub fn output(index: Arc<Index>, outpoint: &OutPoint) -> Result<TxOutResponse> {
     Ok(index.get_tx_out(outpoint)?)
 }
 
@@ -149,7 +151,12 @@ pub fn bitcoin_transaction_hex(index: Arc<Index>, client: Client, txid: &Txid) -
     Ok(hex::encode(transaction))
 }
 
-pub fn transaction(index: Arc<Index>, client: Client, txid: &Txid) -> Result<Transaction> {
+pub fn transaction(
+    index: Arc<Index>,
+    client: Client,
+    txid: &Txid,
+    rune_unit: RuneUnit,
+) -> Result<Transaction> {
     let mut transaction = Transaction::from(if index.is_indexing_bitcoin_transactions() {
         index.get_transaction(txid)?
     } else {
@@ -182,6 +189,28 @@ pub fn transaction(index: Arc<Index>, client: Client, txid: &Txid) -> Result<Tra
         }
     }
 
+    match rune_unit {
+        RuneUnit::Decimals => {
+            let runes = transaction
+                .output
+                .iter()
+                .flat_map(|tx_out| tx_out.runes.iter().map(|rune_amount| rune_amount.rune_id))
+                .collect::<HashSet<_>>();
+
+            let rune_entries = index.get_runes_by_ids(&runes.into_iter().collect())?;
+
+            for (vout, tx_out) in transaction.output.iter_mut().enumerate() {
+                for rune_amount in tx_out.runes.iter_mut() {
+                    let rune_id = rune_amount.rune_id;
+                    let rune_entry = rune_entries.get(&rune_id).unwrap();
+                    rune_amount.amount = 
+                }
+            }
+        }
+        // We don't need to apply divisibility here.
+        RuneUnit::Cents => {}
+    }
+
     Ok(transaction)
 }
 
@@ -193,9 +222,9 @@ pub fn mempool_txids(index: Arc<Index>) -> Result<Vec<Txid>> {
     Ok(index.get_mempool_txids()?)
 }
 
-pub fn address(index: Arc<Index>, address: &Address) -> Result<AddressData> {
+pub fn address(index: Arc<Index>, address: &Address, rune_unit: &RuneUnit) -> Result<AddressData> {
     let script_pubkey = address.script_pubkey();
-    let outpoints = index.get_script_pubkey_outpoints(&script_pubkey)?;
+    let outpoints = index.get_script_pubkey_outpoints(&script_pubkey, rune_unit)?;
     Ok(outpoints)
 }
 

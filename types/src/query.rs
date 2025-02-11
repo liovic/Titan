@@ -1,6 +1,7 @@
 use {
     bitcoin::BlockHash,
     ordinals::{RuneId, SpacedRune},
+    serde::{Deserialize, Serialize},
     std::{
         fmt::{self, Display},
         str::FromStr,
@@ -95,4 +96,11 @@ impl Into<String> for Rune {
             Self::Id(id) => id.to_string(),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RuneUnit {
+    Decimals,
+    Cents,
 }

@@ -4,7 +4,7 @@ use {
         index::{
             bitcoin_rpc::BitcoinCoreRpcResultExt, inscription::index_rune_icon, Chain, StoreError,
         },
-        models::{Lot, RuneEntry, TransactionStateChange},
+        models::{Lot, RuneAmount, RuneEntry, TransactionStateChange, TxOutEntry},
         util::IntoUsize,
     },
     bitcoin::{consensus::encode, OutPoint, Transaction, Txid},
@@ -12,7 +12,6 @@ use {
     ordinals::{Artifact, Edict, Etching, Height, Rune, RuneId, Runestone, SpacedRune},
     std::collections::HashMap,
     thiserror::Error,
-    titan_types::{RuneAmount, TxOutEntry},
 };
 
 #[derive(Debug, Error)]

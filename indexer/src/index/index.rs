@@ -9,7 +9,7 @@ use {
     },
     crate::{
         index::updater::{ReorgError, UpdaterError},
-        models::{block_id_to_transaction_status, Inscription, RuneEntry},
+        models::{block_id_to_transaction_status, Inscription, RuneAmount, RuneEntry, TxOutEntry},
     },
     bitcoin::{BlockHash, OutPoint, ScriptBuf, Transaction as BitcoinTransaction, Txid},
     ordinals::{Rune, RuneId},
@@ -23,8 +23,8 @@ use {
         time::Duration,
     },
     titan_types::{
-        AddressData, AddressTxOut, Block, Event, InscriptionId, Pagination, PaginationResponse,
-        RuneAmount, Transaction, TransactionStatus, TxOutEntry,
+        query::RuneUnit, AddressData, AddressTxOut, Block, Event, InscriptionId, Pagination,
+        PaginationResponse, Transaction, TransactionStatus,
     },
     tokio::{runtime::Runtime, sync::mpsc::Sender},
     tracing::{error, info, warn},
@@ -229,6 +229,10 @@ impl Index {
         Ok(self.db.get_rune(rune_id)?)
     }
 
+    pub fn get_runes_by_ids(&self, rune_ids: &Vec<RuneId>) -> Result<HashMap<RuneId, RuneEntry>> {
+        Ok(self.db.get_runes_by_ids(rune_ids)?)
+    }
+
     pub fn get_runes(
         &self,
         pagination: Pagination,
@@ -259,10 +263,17 @@ impl Index {
             .get_last_rune_transactions(rune_id, pagination, mempool)?)
     }
 
-    pub fn get_script_pubkey_outpoints(&self, script: &ScriptBuf) -> Result<AddressData> {
+    pub fn get_script_pubkey_outpoints(
+        &self,
+        script: &ScriptBuf,
+        rune_unit: &RuneUnit,
+    ) -> Result<AddressData> {
         let outpoints = self.db.get_script_pubkey_outpoints(script, None)?;
         let outpoints_to_tx_out = self.db.get_tx_outs(&outpoints, None)?;
-        let outpoint_txns: Vec<Txid> = outpoints_to_tx_out.keys().map(|outpoint| outpoint.txid).collect();
+        let outpoint_txns: Vec<Txid> = outpoints_to_tx_out
+            .keys()
+            .map(|outpoint| outpoint.txid)
+            .collect();
         let txns_confirming_block = self.db.get_transaction_confirming_blocks(&outpoint_txns)?;
 
         let mut runes = HashMap::new();

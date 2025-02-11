@@ -9,7 +9,7 @@ use {
     },
     crate::models::{
         BatchDelete, BatchRollback, BatchUpdate, BlockId, Inscription, RuneEntry,
-        TransactionStateChange, TxRuneIndexRef,
+        TransactionStateChange, TxOutEntry, TxRuneIndexRef,
     },
     bitcoin::{consensus, hashes::Hash, BlockHash, OutPoint, ScriptBuf, Transaction, Txid},
     borsh::BorshDeserialize,
@@ -24,7 +24,7 @@ use {
         collections::{HashMap, HashSet},
         sync::{Arc, RwLock},
     },
-    titan_types::{Block, InscriptionId, Pagination, PaginationResponse, Subscription, TxOutEntry},
+    titan_types::{Block, InscriptionId, Pagination, PaginationResponse, Subscription},
     util::{
         inscription_id_to_bytes, outpoint_to_bytes, rune_id_to_bytes, txid_from_bytes,
         txid_to_bytes,

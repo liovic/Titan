@@ -20,7 +20,10 @@ use {
     bitcoin::{address::NetworkUnchecked, Address, OutPoint, Txid},
     http::{header, StatusCode},
     std::{io, net::ToSocketAddrs, sync::Arc},
-    titan_types::{query, InscriptionId, Pagination, Subscription},
+    titan_types::{
+        query::{self, RuneUnit},
+        InscriptionId, Pagination, Subscription,
+    },
     tokio::task,
     tower_http::{
         compression::CompressionLayer,
@@ -173,9 +176,15 @@ impl Server {
         Extension(index): Extension<Arc<Index>>,
         Extension(config): Extension<Arc<ServerConfig>>,
         Path(txid): Path<Txid>,
+        Query(rune_unit): Query<RuneUnit>,
     ) -> ServerResult {
         task::block_in_place(|| {
-            let transaction = api::transaction(index, config.get_new_rpc_client()?, &txid)?;
+            let transaction = api::transaction(
+                index,
+                config.get_new_rpc_client()?,
+                &txid,
+                rune_unit,
+            )?;
             Ok(Json(transaction).into_response())
         })
     }
