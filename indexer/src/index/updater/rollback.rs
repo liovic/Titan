@@ -1,5 +1,5 @@
 use {
-    super::rollback_cache::RollbackCache,
+    super::{index_updater::RuneMintable, rollback_cache::RollbackCache},
     crate::{
         index::{store::Store, Settings, StoreError},
         models::TransactionStateChange,
@@ -12,7 +12,7 @@ use {
     },
     thiserror::Error,
     titan_types::{InscriptionId, SpentStatus},
-    tracing::{info, trace, warn},
+    tracing::{info, warn},
 };
 
 #[derive(Debug, Error)]
@@ -40,7 +40,7 @@ impl From<Settings> for RollbackSettings {
 pub(super) struct Rollback<'a> {
     store: &'a Arc<dyn Store + Send + Sync>,
     settings: RollbackSettings,
-    cache: RollbackCache<'a>,
+    pub cache: RollbackCache<'a>,
 }
 
 impl<'a> Rollback<'a> {
@@ -153,12 +153,21 @@ impl<'a> Rollback<'a> {
                         index: 0,
                     });
 
+                    self.cache.set_mintable_rune(id, rune.to_string(), false);
+                    if let Some(start) = rune_entry.start() {
+                        self.cache
+                            .set_rune_mintable_to_delete(rune.to_string(), start);
+                    }
+
+                    if let Some(end) = rune_entry.end() {
+                        self.cache
+                            .set_rune_unmintable_to_delete(rune.to_string(), end);
+                    }
+
                     // Decrease rune count
                     self.cache.decrement_runes_count();
                     self.cache.add_rune_number_to_delete(rune_entry.number);
-
-                    // self.store.delete_rune_id_number(rune_entry.number)?;
-                    // self.update_rune_numbers_after_revert(rune_entry.number, self.runes)?;
+                    self.cache.add_rune_name_to_delete(rune.to_string());
 
                     // Delete all rune transactions
                     self.cache.add_delete_all_rune_transactions(id);
@@ -211,9 +220,14 @@ impl<'a> Rollback<'a> {
                 let result = rune_entry.mints.saturating_add_signed(-1);
 
                 rune_entry.mints = result;
+                self.cache.set_mintable_rune(
+                    *rune_id,
+                    rune_entry.spaced_rune.rune.to_string(),
+                    true,
+                );
             }
 
-            self.cache.set_rune(rune_id.clone(), rune_entry);
+            self.cache.set_rune(*rune_id, rune_entry);
         }
 
         Ok(())

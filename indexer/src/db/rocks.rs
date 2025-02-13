@@ -2,8 +2,11 @@ use {
     super::{
         entry::Entry,
         util::{
-            parse_outpoint_from_script_pubkey_key, rune_id_from_bytes, rune_index_key,
-            rune_transaction_key, script_pubkey_outpoint_to_bytes, script_pubkey_search_key,
+            disable_rune_mintable_at_height_key, enable_rune_mintable_at_height_key,
+            parse_outpoint_from_script_pubkey_key, parse_rune_name_from_mintable_at_height_key,
+            rune_id_from_bytes, rune_index_key, rune_mintable_at_height_key, rune_mintable_key,
+            rune_transaction_key, rune_unmintable_at_height_key, script_pubkey_outpoint_to_bytes,
+            script_pubkey_search_key,
         },
         *,
     },
@@ -60,7 +63,9 @@ const TRANSACTION_RUNE_INDEX_MEMPOOL_CF: &str = "transaction_rune_index_mempool"
 const RUNES_COUNT_KEY: &str = "runes_count";
 const RUNES_CF: &str = "runes";
 const RUNE_IDS_CF: &str = "rune_ids";
+const RUNE_NAMES_CF: &str = "rune_names";
 const RUNE_NUMBER_CF: &str = "rune_number";
+const RUNE_MINTABLE_CF: &str = "rune_mintable";
 
 const INSCRIPTIONS_CF: &str = "inscriptions";
 
@@ -113,6 +118,10 @@ impl RocksDB {
             ColumnFamilyDescriptor::new(RUNE_IDS_CF, cf_opts.clone());
         let rune_number_cfd: ColumnFamilyDescriptor =
             ColumnFamilyDescriptor::new(RUNE_NUMBER_CF, cf_opts.clone());
+        let rune_names_cfd: ColumnFamilyDescriptor =
+            ColumnFamilyDescriptor::new(RUNE_NAMES_CF, cf_opts.clone());
+        let rune_mintable_cfd: ColumnFamilyDescriptor =
+            ColumnFamilyDescriptor::new(RUNE_MINTABLE_CF, cf_opts.clone());
         let inscriptions_cfd: ColumnFamilyDescriptor =
             ColumnFamilyDescriptor::new(INSCRIPTIONS_CF, cf_opts.clone());
         let mempool_cfd: ColumnFamilyDescriptor =
@@ -178,6 +187,8 @@ impl RocksDB {
                 runes_cfd,
                 rune_ids_cfd,
                 rune_number_cfd,
+                rune_names_cfd,
+                rune_mintable_cfd,
                 inscriptions_cfd,
                 mempool_cfd,
                 stats_cfd,
@@ -398,6 +409,179 @@ impl RocksDB {
         }
 
         Ok(result)
+    }
+
+    pub fn get_runes_ids_by_names(
+        &self,
+        runes_names: &Vec<String>,
+    ) -> DBResult<HashMap<String, RuneId>> {
+        let cf_handle = self.cf_handle(RUNE_NAMES_CF)?;
+        let keys: Vec<_> = runes_names
+            .iter()
+            .map(|rune_name| (&cf_handle, rune_name))
+            .collect();
+        let values = self.db.multi_get_cf(keys);
+
+        let mut result = HashMap::new();
+        for (i, value) in values.iter().enumerate() {
+            if let Ok(Some(value)) = value {
+                result.insert(
+                    runes_names[i].clone(),
+                    rune_id_from_bytes(value).map_err(|_| RocksDBError::InvalidRuneId)?,
+                );
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Searches the RUNE_NAMES_CF column family for rune names starting with `query`
+    /// and returns a paginated list of tuples (rune_name, rune_id).
+    pub fn search_runes(
+        &self,
+        query: &str,
+        pagination: Pagination,
+    ) -> DBResult<PaginationResponse<(String, RuneId)>> {
+        // Get the handle for the rune names CF.
+        let cf_handle = self.cf_handle(RUNE_NAMES_CF)?;
+        let search_prefix = query.as_bytes();
+        // Use an iterator starting from the query string.
+        let iter = self.db.iterator_cf(
+            &cf_handle,
+            IteratorMode::From(search_prefix, Direction::Forward),
+        );
+        let (skip, limit) = pagination.into();
+        let mut items = Vec::new();
+        let mut count = 0;
+        for item in iter {
+            let (key, value) = item?;
+            // Once the key does not start with the query prefix, we are done.
+            if !key.starts_with(search_prefix) {
+                break;
+            }
+            // Skip the first `skip` items.
+            if count < skip {
+                count += 1;
+                continue;
+            }
+
+            if items.len() as u64 >= limit {
+                break;
+            }
+
+            let name = String::from_utf8(key.to_vec()).unwrap_or_default();
+
+            let rune_id = rune_id_from_bytes(&value).map_err(|_| RocksDBError::InvalidRuneId)?;
+            items.push((name, rune_id));
+            count += 1;
+        }
+
+        let offset = skip + items.len() as u64;
+        Ok(PaginationResponse { items, offset })
+    }
+
+    /// Searches the RUNE_MINTABLE_CF column family for rune ids that are currently mintable.
+    pub fn search_mintable_runes(
+        &self,
+        query: &str,
+        pagination: Pagination,
+    ) -> DBResult<PaginationResponse<(String, RuneId)>> {
+        // Get the handle for the rune names CF.
+        let cf_handle = self.cf_handle(RUNE_MINTABLE_CF)?;
+        let search_prefix = rune_mintable_key(query);
+
+        // Use an iterator starting from the query string.
+        let iter = self.db.iterator_cf(
+            &cf_handle,
+            IteratorMode::From(&search_prefix, Direction::Forward),
+        );
+
+        let (skip, limit) = pagination.into();
+        let mut items = Vec::new();
+        let mut count = 0;
+        for item in iter {
+            let (key, value) = item?;
+            // Once the key does not start with the query prefix, we are done.
+            if !key.starts_with(&search_prefix) {
+                break;
+            }
+            // Skip the first `skip` items.
+            if count < skip {
+                count += 1;
+                continue;
+            }
+
+            if items.len() as u64 >= limit {
+                break;
+            }
+
+            let name = String::from_utf8(key.to_vec()).unwrap_or_default();
+
+            let rune_id = rune_id_from_bytes(&value).map_err(|_| RocksDBError::InvalidRuneId)?;
+            items.push((name, rune_id));
+            count += 1;
+        }
+
+        let offset = skip + items.len() as u64;
+        Ok(PaginationResponse { items, offset })
+    }
+
+    pub fn get_mintable_runes_starting_at_block_height(
+        &self,
+        block_height: u64,
+    ) -> DBResult<HashMap<RuneId, String>> {
+        let cf_handle = self.cf_handle(RUNE_MINTABLE_CF)?;
+        let key = rune_mintable_at_height_key(block_height);
+
+        // Use an iterator starting from the query string.
+        let iter = self
+            .db
+            .iterator_cf(&cf_handle, IteratorMode::From(&key, Direction::Forward));
+
+        let mut runes = HashMap::new();
+        for item in iter {
+            let (key, value) = item?;
+
+            if !key.starts_with(&key) {
+                break;
+            }
+
+            let rune_name = parse_rune_name_from_mintable_at_height_key(&key)
+                .map_err(|_| RocksDBError::InvalidRuneId)?;
+            let rune_id = rune_id_from_bytes(&value).map_err(|_| RocksDBError::InvalidRuneId)?;
+            runes.insert(rune_id, rune_name);
+        }
+
+        Ok(runes)
+    }
+
+    pub fn get_mintable_runes_stopping_at_block_height(
+        &self,
+        block_height: u64,
+    ) -> DBResult<HashMap<RuneId, String>> {
+        let cf_handle = self.cf_handle(RUNE_MINTABLE_CF)?;
+        let key = rune_unmintable_at_height_key(block_height);
+
+        // Use an iterator starting from the query string.
+        let iter = self
+            .db
+            .iterator_cf(&cf_handle, IteratorMode::From(&key, Direction::Forward));
+
+        let mut runes = HashMap::new();
+        for item in iter {
+            let (key, value) = item?;
+
+            if !key.starts_with(&key) {
+                break;
+            }
+
+            let rune_name = parse_rune_name_from_mintable_at_height_key(&key)
+                .map_err(|_| RocksDBError::InvalidRuneId)?;
+            let rune_id = rune_id_from_bytes(&value).map_err(|_| RocksDBError::InvalidRuneId)?;
+            runes.insert(rune_id, rune_name);
+        }
+
+        Ok(runes)
     }
 
     pub fn get_tx_out(&self, outpoint: &OutPoint, mempool: bool) -> DBResult<TxOutEntry> {
@@ -959,8 +1143,10 @@ impl RocksDB {
         for (i, result) in results.iter().enumerate() {
             match result {
                 Ok(Some(bytes)) => {
-                    spent_outpoints
-                        .insert(outpoints[i].clone(), Some(SpenderReference::load(bytes.clone())));
+                    spent_outpoints.insert(
+                        outpoints[i].clone(),
+                        Some(SpenderReference::load(bytes.clone())),
+                    );
                 }
                 Ok(None) => {
                     spent_outpoints.insert(outpoints[i].clone(), None);
@@ -1087,7 +1273,6 @@ impl RocksDB {
     pub fn batch_update(&self, update: &BatchUpdate, mempool: bool) -> DBResult<()> {
         let mut batch = WriteBatch::default();
 
-        // 1. Update blocks
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(BLOCKS_CF)?;
             for (block_hash, block) in update.blocks.iter() {
@@ -1099,7 +1284,6 @@ impl RocksDB {
             }
         }
 
-        // 2. Update block_hashes
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(BLOCK_HEIGHT_TO_HASH_CF)?;
             for (block_height, block_hash) in update.block_hashes.iter() {
@@ -1111,7 +1295,6 @@ impl RocksDB {
             }
         }
 
-        // 3. Update txouts
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(OUTPOINTS_MEMPOOL_CF)?
@@ -1128,7 +1311,6 @@ impl RocksDB {
             }
         }
 
-        // 4. Update tx_state_changes
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(TRANSACTIONS_STATE_CHANGE_MEMPOOL_CF)?
@@ -1145,7 +1327,6 @@ impl RocksDB {
             }
         }
 
-        // 5. Update runes
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNES_CF)?;
 
@@ -1154,7 +1335,6 @@ impl RocksDB {
             }
         }
 
-        // 6. Update rune_ids
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNE_IDS_CF)?;
 
@@ -1164,7 +1344,6 @@ impl RocksDB {
             }
         }
 
-        // 7. Update rune_numbers
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNE_NUMBER_CF)?;
 
@@ -1174,7 +1353,45 @@ impl RocksDB {
             }
         }
 
-        // 8. Update inscriptions
+        {
+            let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNE_NAMES_CF)?;
+
+            for (name, rune_id) in update.rune_names.iter() {
+                batch.put_cf(&cf_handle, name, rune_id_to_bytes(&rune_id));
+            }
+        }
+
+        {
+            let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNE_MINTABLE_CF)?;
+            for (rune_id, rune_name) in update.rune_mintable.iter() {
+                batch.put_cf(
+                    &cf_handle,
+                    rune_mintable_key(rune_name),
+                    rune_id_to_bytes(rune_id),
+                );
+            }
+
+            for (_, rune_name) in update.rune_unmintable.iter() {
+                batch.delete_cf(&cf_handle, rune_mintable_key(rune_name));
+            }
+
+            for (rune_id, (rune_name, block_height)) in update.rune_mintable_at_height.iter() {
+                batch.put_cf(
+                    &cf_handle,
+                    enable_rune_mintable_at_height_key(*block_height, rune_name),
+                    rune_id_to_bytes(rune_id),
+                );
+            }
+
+            for (rune_id, (rune_name, block_height)) in update.rune_unmintable_at_height.iter() {
+                batch.put_cf(
+                    &cf_handle,
+                    disable_rune_mintable_at_height_key(*block_height, rune_name),
+                    rune_id_to_bytes(rune_id),
+                );
+            }
+        }
+
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(INSCRIPTIONS_CF)?;
 
@@ -1187,7 +1404,6 @@ impl RocksDB {
             }
         }
 
-        // 9. Update mempool_txs
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(MEMPOOL_CF)?;
             for txid in update.mempool_txs.iter() {
@@ -1200,7 +1416,6 @@ impl RocksDB {
             }
         }
 
-        // 10. Update runes_count
         if !mempool {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(STATS_CF)?;
             batch.put_cf(
@@ -1210,7 +1425,6 @@ impl RocksDB {
             );
         }
 
-        // 11. Update block_count
         if !mempool {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(STATS_CF)?;
             batch.put_cf(
@@ -1220,7 +1434,6 @@ impl RocksDB {
             );
         }
 
-        // 12. Update purged_blocks_count
         if !mempool {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(STATS_CF)?;
             batch.put_cf(
@@ -1230,7 +1443,6 @@ impl RocksDB {
             );
         }
 
-        // 13. Update addresses
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(SCRIPT_PUBKEYS_MEMPOOL_CF)?
@@ -1256,7 +1468,6 @@ impl RocksDB {
             }
         }
 
-        // 14. Update address_outpoints
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(OUTPOINT_TO_SCRIPT_PUBKEY_MEMPOOL_CF)?
@@ -1273,7 +1484,6 @@ impl RocksDB {
             }
         }
 
-        // 15. Update spent_outpoints_in_mempool
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> =
                 self.cf_handle(SPENT_OUTPOINTS_MEMPOOL_CF)?;
@@ -1286,7 +1496,6 @@ impl RocksDB {
             }
         }
 
-        // 16. Update transactions
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(TRANSACTIONS_MEMPOOL_CF)?
@@ -1376,7 +1585,6 @@ impl RocksDB {
     pub fn batch_rollback(&self, rollback: &BatchRollback, mempool: bool) -> DBResult<()> {
         let mut batch = WriteBatch::default();
 
-        // 1. Update runes count
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(STATS_CF)?;
             batch.put_cf(
@@ -1386,7 +1594,6 @@ impl RocksDB {
             );
         }
 
-        // 2. Update rune_entry
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNES_CF)?;
             for (rune_id, rune_entry) in rollback.rune_entry.iter() {
@@ -1398,7 +1605,6 @@ impl RocksDB {
             }
         }
 
-        // 3. Update txouts
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(OUTPOINTS_MEMPOOL_CF)?
@@ -1415,7 +1621,6 @@ impl RocksDB {
             }
         }
 
-        // 4. Update script_pubkey_entry
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(SCRIPT_PUBKEYS_MEMPOOL_CF)?
@@ -1441,7 +1646,6 @@ impl RocksDB {
             }
         }
 
-        // 5. Update outpoints_to_delete
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(OUTPOINTS_MEMPOOL_CF)?
@@ -1454,7 +1658,6 @@ impl RocksDB {
             }
         }
 
-        // 6. Script pubkey outpoints
         {
             let cf_handle = if mempool {
                 self.cf_handle(OUTPOINT_TO_SCRIPT_PUBKEY_MEMPOOL_CF)?
@@ -1467,7 +1670,6 @@ impl RocksDB {
             }
         }
 
-        // 7. Update prev_outpoints_to_delete
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(OUTPOINTS_MEMPOOL_CF)?
@@ -1480,7 +1682,6 @@ impl RocksDB {
             }
         }
 
-        // 8. Update runes_to_delete
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNES_CF)?;
             for rune_id in rollback.runes_to_delete.iter() {
@@ -1488,7 +1689,6 @@ impl RocksDB {
             }
         }
 
-        // 9. Update runes_ids_to_delete
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNE_IDS_CF)?;
             for rune in rollback.runes_ids_to_delete.iter() {
@@ -1496,7 +1696,13 @@ impl RocksDB {
             }
         }
 
-        // 10. Update rune_numbers_to_delete
+        {
+            let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNE_NAMES_CF)?;
+            for rune_name in rollback.rune_names_to_delete.iter() {
+                batch.delete_cf(&cf_handle, rune_name);
+            }
+        }
+
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNE_NUMBER_CF)?;
             for number in rollback.rune_numbers_to_delete.iter() {
@@ -1504,7 +1710,35 @@ impl RocksDB {
             }
         }
 
-        // 11. Update inscriptions_to_delete
+        {
+            let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNE_MINTABLE_CF)?;
+            for (rune_id, rune_name) in rollback.rune_mintable.iter() {
+                batch.put_cf(
+                    &cf_handle,
+                    rune_mintable_key(rune_name),
+                    rune_id_to_bytes(rune_id),
+                );
+            }
+
+            for (_, rune_name) in rollback.rune_unmintable.iter() {
+                batch.delete_cf(&cf_handle, rune_mintable_key(rune_name));
+            }
+
+            for (rune_name, block_height) in rollback.rune_mintable_at_height_to_delete.iter() {
+                batch.delete_cf(
+                    &cf_handle,
+                    enable_rune_mintable_at_height_key(*block_height, rune_name),
+                );
+            }
+
+            for (rune_name, block_height) in rollback.rune_unmintable_at_height_to_delete.iter() {
+                batch.delete_cf(
+                    &cf_handle,
+                    disable_rune_mintable_at_height_key(*block_height, rune_name),
+                );
+            }
+        }
+
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(INSCRIPTIONS_CF)?;
             for inscription_id in rollback.inscriptions_to_delete.iter() {
@@ -1512,7 +1746,6 @@ impl RocksDB {
             }
         }
 
-        // 12. Update delete_all_rune_transactions in block
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(RUNE_TRANSACTIONS_CF)?;
             for rune_id in rollback.delete_all_rune_transactions.iter() {
@@ -1520,7 +1753,6 @@ impl RocksDB {
             }
         }
 
-        // 13. Update delete_all_rune_transactions in mempool
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> =
                 self.cf_handle(RUNE_TRANSACTIONS_MEMPOOL_CF)?;
@@ -1529,7 +1761,6 @@ impl RocksDB {
             }
         }
 
-        // 14. Update txs_to_delete
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(TRANSACTIONS_MEMPOOL_CF)?
@@ -1542,7 +1773,6 @@ impl RocksDB {
             }
         }
 
-        // 15. Update tx state changes
         {
             let cf_handle: Arc<BoundColumnFamily<'_>> = if mempool {
                 self.cf_handle(TRANSACTIONS_STATE_CHANGE_MEMPOOL_CF)?
@@ -1555,7 +1785,6 @@ impl RocksDB {
             }
         }
 
-        // 16. Update tx confirming block
         if !mempool {
             let cf_handle: Arc<BoundColumnFamily<'_>> =
                 self.cf_handle(TRANSACTION_CONFIRMING_BLOCK_CF)?;
@@ -1564,7 +1793,6 @@ impl RocksDB {
             }
         }
 
-        // 17. Remove mempool txs
         if mempool {
             let cf_handle: Arc<BoundColumnFamily<'_>> = self.cf_handle(MEMPOOL_CF)?;
             for txid in rollback.txs_to_delete.iter() {

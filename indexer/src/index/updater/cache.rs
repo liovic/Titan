@@ -1,5 +1,5 @@
 use {
-    super::store_lock::StoreWithLock,
+    super::{index_updater::RuneMintable, store_lock::StoreWithLock},
     crate::{
         index::{store::StoreError, Chain, Settings},
         models::{
@@ -282,8 +282,34 @@ impl UpdaterCache {
         self.update.rune_ids.insert(rune.0, rune_id);
     }
 
+    pub fn set_rune_name(&mut self, rune_name: String, rune_id: RuneId) -> () {
+        self.update.rune_names.insert(rune_name, rune_id);
+    }
+
     pub fn set_rune_id_number(&mut self, number: u64, rune_id: RuneId) -> () {
         self.update.rune_numbers.insert(number, rune_id);
+    }
+
+    pub fn set_rune_mintable_at_height(
+        &mut self,
+        rune_id: RuneId,
+        rune_name: String,
+        height: u64,
+    ) -> () {
+        self.update
+            .rune_mintable_at_height
+            .insert(rune_id, (rune_name, height));
+    }
+
+    pub fn set_rune_unmintable_at_height(
+        &mut self,
+        rune_id: RuneId,
+        rune_name: String,
+        height: u64,
+    ) -> () {
+        self.update
+            .rune_unmintable_at_height
+            .insert(rune_id, (rune_name, height));
     }
 
     pub fn set_inscription(
@@ -490,5 +516,15 @@ impl UpdaterCache {
         self.update.purged_blocks_count = height;
 
         Ok(())
+    }
+}
+
+impl RuneMintable for UpdaterCache {
+    fn set_mintable_rune(&mut self, rune_id: RuneId, rune_name: String, mintable: bool) {
+        if mintable {
+            self.update.rune_mintable.insert(rune_id, rune_name);
+        } else {
+            self.update.rune_unmintable.insert(rune_id, rune_name);
+        }
     }
 }

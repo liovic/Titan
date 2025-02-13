@@ -129,3 +129,54 @@ pub fn rune_transaction_key(rune_id: &RuneId, index: u64) -> Vec<u8> {
     v.extend_from_slice(&index.to_le_bytes());
     v
 }
+
+pub fn search_rune_mintable_prefix() -> Vec<u8> {
+    let mut v = Vec::with_capacity(10);
+    v.extend_from_slice(b"m:");
+    v
+}
+
+pub fn rune_mintable_key(query: &str) -> Vec<u8> {
+    let mut v = search_rune_mintable_prefix();
+    v.extend_from_slice(query.as_bytes());
+    v
+}
+
+pub fn rune_mintable_at_height_key(block_height: u64) -> Vec<u8> {
+    let mut v = Vec::with_capacity(3 + 8);
+    v.extend_from_slice(b"mh:");
+    v.extend_from_slice(&block_height.to_le_bytes());
+    v
+}
+
+pub fn rune_unmintable_at_height_key(block_height: u64) -> Vec<u8> {
+    let mut v = Vec::with_capacity(4 + 8);
+    v.extend_from_slice(b"nmh:");
+    v.extend_from_slice(&block_height.to_le_bytes());
+    v
+}
+
+pub fn enable_rune_mintable_at_height_key(block_height: u64, rune_name: &String) -> Vec<u8> {
+    let mut v = rune_mintable_at_height_key(block_height);
+    v.extend_from_slice(b":");
+    v.extend_from_slice(rune_name.as_bytes());
+    v
+}
+
+pub fn disable_rune_mintable_at_height_key(block_height: u64, rune_name: &String) -> Vec<u8> {
+    let mut v = rune_unmintable_at_height_key(block_height);
+    v.extend_from_slice(b":");
+    v.extend_from_slice(rune_name.as_bytes());
+    v
+}
+
+pub fn parse_rune_name_from_mintable_at_height_key(key: &[u8]) -> Result<String, &'static str> {
+    // Find the last ':' in the key
+    let end = key
+        .iter()
+        .rposition(|b| *b == b':')
+        .ok_or("Invalid key format: missing delimiter")?;
+
+    let rune_name = &key[end + 1..];
+    Ok(String::from_utf8(rune_name.to_vec()).unwrap())
+}

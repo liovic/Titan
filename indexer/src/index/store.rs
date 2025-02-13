@@ -6,12 +6,15 @@ use {
             TransactionStateChange,
         },
     },
-    bitcoin::{consensus, hex::HexToArrayError, BlockHash, OutPoint, ScriptBuf, Txid},
+    bitcoin::{
+        consensus, hex::HexToArrayError, key::SortKey, BlockHash, OutPoint, ScriptBuf, Txid,
+    },
     ordinals::{Rune, RuneId},
     std::collections::{HashMap, HashSet},
     thiserror::Error,
     titan_types::{
-        Block, InscriptionId, Pagination, PaginationResponse, SpenderReference, SpentStatus, Transaction, TransactionStatus, TxOut, TxOutEntry
+        query::Sort, Block, InscriptionId, Pagination, PaginationResponse, SpenderReference,
+        SpentStatus, Transaction, TransactionStatus, TxOutEntry,
     },
 };
 
@@ -132,10 +135,34 @@ pub trait Store {
         &self,
         rune_ids: &Vec<RuneId>,
     ) -> Result<HashMap<RuneId, RuneEntry>, StoreError>;
+    fn get_runes_ids_by_names(
+        &self,
+        names: &Vec<String>,
+    ) -> Result<HashMap<String, RuneId>, StoreError>;
     fn get_runes(
         &self,
         pagination: Pagination,
+        sort: Sort,
     ) -> Result<PaginationResponse<(RuneId, RuneEntry)>, StoreError>;
+    fn search_runes(
+        &self,
+        query: &str,
+        pagination: Pagination,
+    ) -> Result<PaginationResponse<(String, RuneId)>, StoreError>;
+
+    fn search_mintable_runes(
+        &self,
+        query: &str,
+        pagination: Pagination,
+    ) -> Result<PaginationResponse<(String, RuneId)>, StoreError>;
+    fn get_mintable_runes_starting_at_block_height(
+        &self,
+        height: u64,
+    ) -> Result<HashMap<RuneId, String>, StoreError>;
+    fn get_mintable_runes_stopping_at_block_height(
+        &self,
+        height: u64,
+    ) -> Result<HashMap<RuneId, String>, StoreError>;
 
     // inscription
     fn get_inscription(&self, inscription_id: &InscriptionId) -> Result<Inscription, StoreError>;
@@ -219,26 +246,46 @@ impl Store for RocksDB {
         Ok(self.get_runes_by_ids(rune_ids)?)
     }
 
+    fn get_runes_ids_by_names(
+        &self,
+        rune_names: &Vec<String>,
+    ) -> Result<HashMap<String, RuneId>, StoreError> {
+        Ok(self.get_runes_ids_by_names(rune_names)?)
+    }
+
     fn get_runes(
         &self,
         pagination: Pagination,
+        sort: Sort,
     ) -> Result<PaginationResponse<(RuneId, RuneEntry)>, StoreError> {
         let runes_count = self.get_runes_count()?;
         let (skip, limit) = pagination.into();
 
-        let start = runes_count.saturating_sub(skip);
-        let end = runes_count.saturating_sub(skip).saturating_sub(limit);
+        let (order, offset) = if matches!(sort, Sort::Ascending) {
+            let start = skip;
+            let end = skip.saturating_add(limit);
+            (start..end, end)
+        } else {
+            let start = runes_count.saturating_sub(skip);
+            let end = runes_count.saturating_sub(skip).saturating_sub(limit);
+
+            (end..start, skip.saturating_add(limit))
+        };
+
+        let runes_number_to_id = self.get_rune_ids_by_numbers(&order.clone().collect())?;
+        let runes_entries =
+            self.get_runes_by_ids(&runes_number_to_id.values().cloned().collect())?;
 
         let mut runes = Vec::new();
-        for i in (end..start).rev() {
-            let rune_id = self.get_rune_id_by_number(i)?;
-            let rune_entry = self.get_rune(&rune_id)?;
-            runes.push((rune_id, rune_entry));
+        for i in order {
+            let rune_id = runes_number_to_id.get(&i).unwrap();
+            let rune_entry = runes_entries.get(rune_id).unwrap();
+            runes.push((rune_id.clone(), rune_entry.clone()));
         }
 
         Ok(PaginationResponse {
             items: runes,
-            offset: start,
+            offset,
         })
     }
 
@@ -478,6 +525,36 @@ impl Store for RocksDB {
                 offset: new_offset,
             })
         }
+    }
+
+    fn search_runes(
+        &self,
+        query: &str,
+        pagination: Pagination,
+    ) -> Result<PaginationResponse<(String, RuneId)>, StoreError> {
+        Ok(self.search_runes(query, pagination)?)
+    }
+
+    fn search_mintable_runes(
+        &self,
+        query: &str,
+        pagination: Pagination,
+    ) -> Result<PaginationResponse<(String, RuneId)>, StoreError> {
+        Ok(self.search_mintable_runes(query, pagination)?)
+    }
+
+    fn get_mintable_runes_starting_at_block_height(
+        &self,
+        height: u64,
+    ) -> Result<HashMap<RuneId, String>, StoreError> {
+        Ok(self.get_mintable_runes_starting_at_block_height(height)?)
+    }
+
+    fn get_mintable_runes_stopping_at_block_height(
+        &self,
+        height: u64,
+    ) -> Result<HashMap<RuneId, String>, StoreError> {
+        Ok(self.get_mintable_runes_stopping_at_block_height(height)?)
     }
 
     fn get_script_pubkey_outpoints(

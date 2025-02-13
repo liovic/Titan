@@ -19,6 +19,7 @@ use {
     axum_server::Handle,
     bitcoin::{address::NetworkUnchecked, Address, OutPoint, Txid},
     http::{header, StatusCode},
+    ordinals::RuneId,
     std::{io, net::ToSocketAddrs, sync::Arc},
     titan_types::{query, InscriptionId, Pagination, Subscription},
     tokio::task,
@@ -73,8 +74,12 @@ impl Server {
             .route("/inscription/{inscription_id}", get(Self::inscription))
             // Runes
             .route("/runes", get(Self::runes))
+            .route("/runes/ids", get(Self::runes_by_ids))
+            .route("/runes/names", get(Self::runes_by_names))
             .route("/rune/{rune}", get(Self::rune))
             .route("/rune/{rune}/transactions", get(Self::rune_transactions))
+            .route("/rune/search", get(Self::rune_search))
+            .route("/rune/search/mintable", get(Self::rune_search_mintable))
             // Mempool
             .route("/mempool/txids", get(Self::mempool_txids))
             // Subscriptions
@@ -232,8 +237,23 @@ impl Server {
     async fn runes(
         Extension(index): Extension<Arc<Index>>,
         Query(pagination): Query<Pagination>,
+        Query(sort): Query<query::Sort>,
     ) -> ServerResult {
-        task::block_in_place(|| Ok(Json(api::runes(index, pagination)?).into_response()))
+        task::block_in_place(|| Ok(Json(api::runes(index, pagination, sort)?).into_response()))
+    }
+
+    async fn runes_by_ids(
+        Extension(index): Extension<Arc<Index>>,
+        Query(ids): Query<Vec<RuneId>>,
+    ) -> ServerResult {
+        task::block_in_place(|| Ok(Json(api::runes_by_ids(index, &ids)?).into_response()))
+    }
+
+    async fn runes_by_names(
+        Extension(index): Extension<Arc<Index>>,
+        Query(names): Query<Vec<String>>,
+    ) -> ServerResult {
+        task::block_in_place(|| Ok(Json(api::runes_by_names(index, &names)?).into_response()))
     }
 
     async fn rune(
@@ -251,6 +271,20 @@ impl Server {
         task::block_in_place(|| {
             Ok(Json(api::last_rune_transactions(index, &rune, Some(pagination))?).into_response())
         })
+    }
+
+    async fn rune_search(
+        Extension(index): Extension<Arc<Index>>,
+        Query(query): Query<query::RuneSearchQuery>,
+    ) -> ServerResult {
+        task::block_in_place(|| Ok(Json(api::rune_search(index, &query)?).into_response()))
+    }
+
+    async fn rune_search_mintable(
+        Extension(index): Extension<Arc<Index>>,
+        Query(query): Query<query::RuneSearchQuery>,
+    ) -> ServerResult {
+        task::block_in_place(|| Ok(Json(api::rune_search_mintable(index, &query)?).into_response()))
     }
 
     async fn inscription(
@@ -283,7 +317,8 @@ impl Server {
     ) -> ServerResult {
         if !config.index_addresses {
             return Err(ServerError::BadRequest(
-                "addresses are not indexed. Enable --index-addresses to index addresses".to_string(),
+                "addresses are not indexed. Enable --index-addresses to index addresses"
+                    .to_string(),
             ));
         }
 

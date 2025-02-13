@@ -10,11 +10,12 @@ use {
     bitcoin::{consensus, Address, OutPoint, Txid},
     bitcoincore_rpc::{Client, RpcApi},
     http::HeaderMap,
+    ordinals::RuneId,
     std::sync::Arc,
     titan_types::{
-        query, AddressData, Block, BlockTip, InscriptionId, Pagination, PaginationResponse,
-        RuneResponse, SpentStatus, Status, Subscription, Transaction, TransactionStatus,
-        TxOutEntry,
+        query::{self, Sort},
+        AddressData, Block, BlockTip, InscriptionId, Pagination, PaginationResponse, RuneResponse,
+        Status, Subscription, Transaction, TransactionStatus, TxOutEntry,
     },
     tracing::error,
     uuid::Uuid,
@@ -104,8 +105,9 @@ pub fn rune(index: Arc<Index>, rune_query: &query::Rune) -> Result<RuneResponse>
 pub fn runes(
     index: Arc<Index>,
     pagination: Pagination,
+    sort: Sort,
 ) -> Result<PaginationResponse<RuneResponse>> {
-    let rune_entries = index.get_runes(pagination)?;
+    let rune_entries = index.get_runes(pagination, sort)?;
     let block_count = index.get_block_count()?;
     let rune_responses: Vec<RuneResponse> = rune_entries
         .items
@@ -119,6 +121,32 @@ pub fn runes(
     })
 }
 
+pub fn runes_by_ids(index: Arc<Index>, runes_ids: &Vec<RuneId>) -> Result<Vec<RuneResponse>> {
+    let rune_entries = index.get_runes_by_ids(runes_ids)?;
+    let block_count = index.get_block_count()?;
+    let rune_responses: Vec<RuneResponse> = rune_entries
+        .iter()
+        .map(|(rune_id, rune_entry)| rune_entry.to_rune_response(*rune_id, block_count))
+        .collect();
+
+    Ok(rune_responses)
+}
+
+pub fn runes_by_names(index: Arc<Index>, runes_names: &Vec<String>) -> Result<Vec<RuneResponse>> {
+    let runes_names_filtered = runes_names
+        .iter()
+        .map(|name| name.replace("•", "").to_uppercase())
+        .collect();
+    let rune_entries = index.get_runes_by_names(&runes_names_filtered)?;
+    let block_count = index.get_block_count()?;
+    let rune_responses: Vec<RuneResponse> = rune_entries
+        .iter()
+        .map(|(rune_id, rune_entry)| rune_entry.to_rune_response(*rune_id, block_count))
+        .collect();
+
+    Ok(rune_responses)
+}
+
 pub fn last_rune_transactions(
     index: Arc<Index>,
     rune_query: &query::Rune,
@@ -127,6 +155,36 @@ pub fn last_rune_transactions(
     let rune_id = to_rune_id(rune_query, &index)?;
     let transactions = index.get_last_rune_transactions(&rune_id, pagination, None)?;
     Ok(transactions)
+}
+
+pub fn rune_search(
+    index: Arc<Index>,
+    query: &query::RuneSearchQuery,
+) -> Result<PaginationResponse<RuneResponse>> {
+    Ok(index.search_runes(
+        &query
+            .query
+            .as_deref()
+            .unwrap_or("")
+            .replace("•", "")
+            .to_uppercase(),
+        query.pagination,
+    )?)
+}
+
+pub fn rune_search_mintable(
+    index: Arc<Index>,
+    query: &query::RuneSearchQuery,
+) -> Result<PaginationResponse<RuneResponse>> {
+    Ok(index.search_mintable_runes(
+        &query
+            .query
+            .as_deref()
+            .unwrap_or("")
+            .replace("•", "")
+            .to_uppercase(),
+        query.pagination,
+    )?)
 }
 
 pub fn broadcast_transaction(index: Arc<Index>, client: Client, hex: &str) -> Result<Txid> {

@@ -23,8 +23,7 @@ use {
         time::Duration,
     },
     titan_types::{
-        AddressData, AddressTxOut, Block, Event, InscriptionId, Pagination, PaginationResponse,
-        RuneAmount, SpenderReference, Transaction, TransactionStatus, TxOutEntry,
+        query::Sort, AddressData, AddressTxOut, Block, Event, InscriptionId, Pagination, PaginationResponse, RuneAmount, RuneResponse, Transaction, TransactionStatus, TxOutEntry
     },
     tokio::{runtime::Runtime, sync::mpsc::Sender},
     tracing::{error, info, warn},
@@ -222,18 +221,34 @@ impl Index {
     }
 
     pub fn get_tx_outs(&self, outpoints: &Vec<OutPoint>) -> Result<HashMap<OutPoint, TxOutEntry>> {
-        Ok(self.db.get_tx_outs_with_mempool_spent_update(outpoints, None)?)
+        Ok(self
+            .db
+            .get_tx_outs_with_mempool_spent_update(outpoints, None)?)
     }
 
     pub fn get_rune(&self, rune_id: &RuneId) -> Result<RuneEntry> {
         Ok(self.db.get_rune(rune_id)?)
     }
 
+    pub fn get_runes_by_ids(&self, rune_ids: &Vec<RuneId>) -> Result<HashMap<RuneId, RuneEntry>> {
+        Ok(self.db.get_runes_by_ids(rune_ids)?)
+    }
+
+    pub fn get_runes_by_names(
+        &self,
+        runes_names: &Vec<String>,
+    ) -> Result<HashMap<RuneId, RuneEntry>> {
+        let rune_ids_per_name = self.db.get_runes_ids_by_names(runes_names)?;
+        let rune_ids = rune_ids_per_name.values().cloned().collect();
+        Ok(self.db.get_runes_by_ids(&rune_ids)?)
+    }
+
     pub fn get_runes(
         &self,
         pagination: Pagination,
+        sort: Sort,
     ) -> Result<PaginationResponse<(RuneId, RuneEntry)>> {
-        Ok(self.db.get_runes(pagination)?)
+        Ok(self.db.get_runes(pagination, sort)?)
     }
 
     pub fn get_rune_id(&self, rune: &Rune) -> Result<RuneId> {
@@ -259,10 +274,60 @@ impl Index {
             .get_last_rune_transactions(rune_id, pagination, mempool)?)
     }
 
+    pub fn search_runes(
+        &self,
+        query: &str,
+        pagination: Pagination,
+    ) -> Result<PaginationResponse<RuneResponse>> {
+        let runes = self.db.search_runes(query, pagination)?;
+
+        let rune_entries: HashMap<RuneId, RuneEntry> = self
+            .db
+            .get_runes_by_ids(&runes.items.iter().map(|(_, rune_id)| *rune_id).collect())?;
+
+        let block_count = self.get_block_count()?;
+        let mut rune_responses = Vec::new();
+        for (_, rune_id) in runes.items.iter() {
+            let rune_entry = rune_entries.get(rune_id).unwrap();
+            let rune_response = rune_entry.to_rune_response(*rune_id, block_count - 1);
+            rune_responses.push(rune_response);
+        }
+
+        Ok(PaginationResponse {
+            items: rune_responses,
+            offset: runes.offset,
+        })
+    }
+
+    pub fn search_mintable_runes(
+        &self,
+        query: &str,
+        pagination: Pagination,
+    ) -> Result<PaginationResponse<RuneResponse>> {
+        let runes = self.db.search_mintable_runes(query, pagination)?;
+        let rune_entries = self
+            .db
+            .get_runes_by_ids(&runes.items.iter().map(|(_, rune_id)| *rune_id).collect())?;
+
+        let block_count = self.get_block_count()?;
+        let mut rune_responses = Vec::new();
+        for (_, rune_id) in runes.items.iter() {
+            let rune_entry = rune_entries.get(rune_id).unwrap();
+            let rune_response = rune_entry.to_rune_response(*rune_id, block_count - 1);
+            rune_responses.push(rune_response);
+        }
+
+        Ok(PaginationResponse {
+            items: rune_responses,
+            offset: runes.offset,
+        })
+    }
+
     pub fn get_script_pubkey_outpoints(&self, script: &ScriptBuf) -> Result<AddressData> {
         let outpoints = self.db.get_script_pubkey_outpoints(script, None)?;
-        let outpoints_to_tx_out: HashMap<OutPoint, TxOutEntry> =
-            self.db.get_tx_outs_with_mempool_spent_update(&outpoints, None)?;
+        let outpoints_to_tx_out: HashMap<OutPoint, TxOutEntry> = self
+            .db
+            .get_tx_outs_with_mempool_spent_update(&outpoints, None)?;
 
         assert_eq!(
             outpoints.len(),

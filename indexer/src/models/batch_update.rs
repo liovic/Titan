@@ -22,6 +22,14 @@ pub struct BatchUpdate {
     pub runes: HashMap<RuneId, RuneEntry>,
     pub rune_ids: HashMap<u128, RuneId>,
     pub rune_numbers: HashMap<u64, RuneId>,
+    pub rune_names: HashMap<String, RuneId>,
+
+    pub rune_mintable: HashMap<RuneId, String>,
+    pub rune_unmintable: HashMap<RuneId, String>,
+
+    pub rune_mintable_at_height: HashMap<RuneId, (String, u64)>,
+    pub rune_unmintable_at_height: HashMap<RuneId, (String, u64)>,
+
     pub inscriptions: HashMap<InscriptionId, Inscription>,
     pub transactions: HashMap<Txid, Transaction>,
     pub transaction_confirming_block: HashMap<Txid, BlockId>,
@@ -45,6 +53,11 @@ impl BatchUpdate {
             runes: HashMap::new(),
             rune_ids: HashMap::new(),
             rune_numbers: HashMap::new(),
+            rune_names: HashMap::new(),
+            rune_mintable: HashMap::new(),
+            rune_unmintable: HashMap::new(),
+            rune_mintable_at_height: HashMap::new(),
+            rune_unmintable_at_height: HashMap::new(),
             inscriptions: HashMap::new(),
             transactions: HashMap::new(),
             transaction_confirming_block: HashMap::new(),
@@ -67,6 +80,11 @@ impl BatchUpdate {
             && self.runes.is_empty()
             && self.rune_ids.is_empty()
             && self.rune_numbers.is_empty()
+            && self.rune_names.is_empty()
+            && self.rune_mintable.is_empty()
+            && self.rune_unmintable.is_empty()
+            && self.rune_mintable_at_height.is_empty()
+            && self.rune_unmintable_at_height.is_empty()
             && self.inscriptions.is_empty()
             && self.mempool_txs.is_empty()
             && self.transactions.is_empty()
@@ -83,7 +101,8 @@ impl Display for BatchUpdate {
              added: [blocks: {}, txouts: {}, tx_changes: {}, \
              addresses: {} , address_outpoints: {}, \
              spent_outpoints_in_mempool: {}, \
-             runes: txs {}/ runes {}/ ids {}, \
+             runes: txs {}/ runes {}/ ids {}/ names {},/ mintable {}, unmintable {}, \
+             rune_mintable_at_height: {}, rune_unmintable_at_height: {}, \
              inscriptions: {}, \
              transactions: {}, \
              transaction_confirming_block: {}]",
@@ -99,6 +118,11 @@ impl Display for BatchUpdate {
             self.rune_transactions.len(),
             self.runes.len(),
             self.rune_ids.len(),
+            self.rune_names.len(),
+            self.rune_mintable.len(),
+            self.rune_unmintable.len(),
+            self.rune_mintable_at_height.len(),
+            self.rune_unmintable_at_height.len(),
             self.inscriptions.len(),
             self.transactions.len(),
             self.transaction_confirming_block.len(),

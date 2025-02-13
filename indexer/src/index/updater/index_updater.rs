@@ -96,6 +96,10 @@ impl UpdaterError {
 
 type Result<T> = std::result::Result<T, UpdaterError>;
 
+pub trait RuneMintable {
+    fn set_mintable_rune(&mut self, rune_id: RuneId, rune_name: String, mintable: bool);
+}
+
 pub struct Updater {
     db: Arc<StoreWithLock>,
     settings: Settings,
@@ -403,6 +407,10 @@ impl Updater {
         let mut transaction_updater =
             TransactionUpdater::new(self.settings.clone().into(), Some(address_updater))?;
 
+        // This must be called before parsing the block txs. Because we could enable a mint
+        // that was already minted out.
+        self.update_rune_mintable_status_at_height(height, cache, true)?;
+
         let mut block = Block::empty_block(height, bitcoin_block.header);
 
         let mut transaction_update = self
@@ -438,6 +446,31 @@ impl Updater {
         }
 
         Ok(block)
+    }
+
+    fn update_rune_mintable_status_at_height(
+        &self,
+        height: u64,
+        cache: &mut impl RuneMintable,
+        forward: bool,
+    ) -> Result<()> {
+        let (rune_mintable_at_height, rune_unmintable_at_height) = {
+            let db = self.db.read();
+            let rune_mintable_at_height = db.get_mintable_runes_starting_at_block_height(height)?;
+            let rune_unmintable_at_height =
+                db.get_mintable_runes_stopping_at_block_height(height)?;
+            (rune_mintable_at_height, rune_unmintable_at_height)
+        };
+
+        for (rune_id, rune_name) in rune_mintable_at_height {
+            cache.set_mintable_rune(rune_id, rune_name, forward);
+        }
+
+        for (rune_id, rune_name) in rune_unmintable_at_height {
+            cache.set_mintable_rune(rune_id, rune_name, !forward);
+        }
+
+        Ok(())
     }
 
     pub fn index_new_tx(&self, txid: &Txid, tx: &Transaction) -> Result<()> {
@@ -616,6 +649,14 @@ impl Updater {
             .collect::<Vec<_>>();
 
         rollback_updater.revert_transactions(&txids)?;
+
+        // This must be called after the revert_transactions.
+        // It will update the rune mintable status to the previous block.
+        self.update_rune_mintable_status_at_height(
+            height as u64,
+            &mut rollback_updater.cache,
+            false,
+        )?;
 
         {
             let mut transaction_update = self

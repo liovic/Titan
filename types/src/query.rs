@@ -1,6 +1,8 @@
 use {
+    crate::Pagination,
     bitcoin::BlockHash,
     ordinals::{RuneId, SpacedRune},
+    serde::{Deserialize, Serialize},
     std::{
         fmt::{self, Display},
         str::FromStr,
@@ -94,5 +96,25 @@ impl Into<String> for Rune {
             Self::Spaced(rune) => rune.to_string(),
             Self::Id(id) => id.to_string(),
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RuneSearchQuery {
+    #[serde(default)]
+    pub query: Option<String>,
+    #[serde(flatten)]
+    pub pagination: Pagination,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Sort {
+    Ascending,
+    Descending,
+}
+
+impl Default for Sort {
+    fn default() -> Self {
+        Self::Ascending
     }
 }

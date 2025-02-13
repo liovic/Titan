@@ -1,5 +1,5 @@
 use {
-    super::{address::AddressUpdater, cache::UpdaterCache},
+    super::{address::AddressUpdater, cache::UpdaterCache, index_updater::RuneMintable},
     crate::{
         index::{inscription::index_rune_icon, Settings, StoreError},
         models::{BlockId, RuneEntry, TransactionStateChange},
@@ -250,6 +250,16 @@ impl<'a> TransactionUpdater<'a> {
             rune_id: *rune_id,
         });
 
+        // If there is a height, then we're not in mempool.
+        if let Some(height) = height {
+            let rune_entry = cache.get_rune(rune_id)?;
+
+            // If the rune is not mintable at that block, set it to false.
+            if let Err(_) = rune_entry.mintable(height) {
+                cache.set_mintable_rune(*rune_id, rune_entry.spaced_rune.rune.to_string(), false);
+            }
+        }
+
         Ok(())
     }
 
@@ -388,11 +398,23 @@ impl<'a> TransactionUpdater<'a> {
             }
         };
 
+        let start = entry.start();
+        let end = entry.end();
+
+        if let Some(start) = start {
+            cache.set_rune_mintable_at_height(id, rune.to_string(), start);
+        }
+
+        if let Some(end) = end {
+            cache.set_rune_unmintable_at_height(id, rune.to_string(), end);
+        }
+
         cache.set_rune(id, entry);
         cache.set_rune_id_number(cache.get_runes_count(), id);
         cache.set_rune_id(rune, id);
-        cache.increment_runes_count();
+        cache.set_rune_name(rune.to_string(), id);
 
+        cache.increment_runes_count();
         Ok(())
     }
 

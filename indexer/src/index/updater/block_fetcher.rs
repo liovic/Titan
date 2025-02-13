@@ -9,7 +9,7 @@ use {
         time::Duration,
     },
     threadpool::ThreadPool,
-    tracing::{error, warn},
+    tracing::{error, trace, warn},
 };
 
 pub enum BlockLocator {
@@ -77,7 +77,7 @@ pub fn fetch_blocks_from(
                 match get_block_with_retries(&client, BlockLocator::Height(height)) {
                     Ok(Some(block)) => {
                         if intermediate_sender.send((height, block)).is_err() {
-                            warn!("Intermediate receiver disconnected");
+                            trace!("Intermediate receiver disconnected");
                         }
                     }
                     Ok(None) => error!("Block not found for height {}", height),

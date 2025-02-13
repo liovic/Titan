@@ -1,4 +1,5 @@
 use {
+    super::index_updater::RuneMintable,
     crate::{
         index::{store::Store, StoreError},
         models::{BatchRollback, RuneEntry},
@@ -73,6 +74,18 @@ impl<'a> RollbackCache<'a> {
         self.update.rune_entry.insert(rune_id, rune_entry);
     }
 
+    pub fn set_rune_mintable_to_delete(&mut self, rune_name: String, block_height: u64) {
+        self.update
+            .rune_mintable_at_height_to_delete
+            .insert(rune_name, block_height);
+    }
+
+    pub fn set_rune_unmintable_to_delete(&mut self, rune_name: String, block_height: u64) {
+        self.update
+            .rune_unmintable_at_height_to_delete
+            .insert(rune_name, block_height);
+    }
+
     pub fn add_tx_to_delete(&mut self, txid: Txid) {
         self.update.txs_to_delete.push(txid);
     }
@@ -91,6 +104,10 @@ impl<'a> RollbackCache<'a> {
 
     pub fn add_rune_number_to_delete(&mut self, rune_number: u64) {
         self.update.rune_numbers_to_delete.push(rune_number);
+    }
+
+    pub fn add_rune_name_to_delete(&mut self, rune_name: String) {
+        self.update.rune_names_to_delete.push(rune_name);
     }
 
     pub fn add_inscription_to_delete(&mut self, inscription_id: InscriptionId) {
@@ -129,5 +146,15 @@ impl<'a> RollbackCache<'a> {
         info!("Flushing rollback cache: {}", self.update);
         self.db.batch_rollback(&self.update, self.mempool)?;
         Ok(())
+    }
+}
+
+impl<'a> RuneMintable for RollbackCache<'a> {
+    fn set_mintable_rune(&mut self, rune_id: RuneId, rune_name: String, mintable: bool) {
+        if mintable {
+            self.update.rune_mintable.insert(rune_id, rune_name);
+        } else {
+            self.update.rune_unmintable.insert(rune_id, rune_name);
+        }
     }
 }

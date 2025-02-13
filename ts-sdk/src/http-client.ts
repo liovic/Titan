@@ -92,7 +92,6 @@ export class TitanHttpClient {
         'Content-Type': 'text/plain',
       },
     });
-    // Assume the response body is the transaction id.
     return response.data;
   }
 
@@ -123,6 +122,16 @@ export class TitanHttpClient {
     const response = await this.http.get<PaginationResponse<RuneResponse>>(
       '/runes',
       { params },
+    );
+    return response.data;
+  }
+
+  async getRunesByIds(
+    runeIds: Array<string>,
+  ): Promise<PaginationResponse<RuneResponse>> {
+    const response = await this.http.get<Array<RuneResponse>>(
+      '/runes/ids',
+      { runeIds },
     );
     return response.data;
   }
