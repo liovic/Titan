@@ -285,91 +285,26 @@ cd titan
 ./target/release/titan --bitcoin-rpc-url http://localhost:18444 --bitcoin-rpc-username <USERNAME> --bitcoin-rpc-password <PASSWORD> --chain regtest --index-addresses --index-bitcoin-transactions --enable-tcp-subscriptions --data-dir ~/titan-indexer
 ```
 ***Output:***
-
-    2025-03-29T13:37:48.091391Z  INFO titan::subscription::dispatcher: event_dispatcher started
-    2025-03-29T13:37:48.091367Z  INFO titan::subscription::spawn: Spawned subscription tasks (dispatcher + cleanup).
-    2025-03-29T13:37:48.091569Z  INFO titan::subscription::tcp_subscription: TCP Subscription Server listening on 127.0.0.1:8080
-    2025-03-29T13:37:48.093975Z  INFO titan: Spawned background threads
-    2025-03-29T13:37:48.099776Z  INFO titan::server::server: Listening on http://0.0.0.0:3030
-    2025-03-29T13:37:53.098638Z  INFO titan::index::metrics: Average Latency for batch_update_script_pubkeys_for_block: 0.016 ms
-    2025-03-29T13:37:53.098720Z  INFO titan::index::metrics: Average Latency for index_mempool: 0.535 ms
-    2025-03-29T13:37:53.098730Z  INFO titan::index::metrics: Average Latency for notify_tx_updates: 0.007 ms
-    2025-03-29T13:37:58.101446Z  INFO titan::index::metrics: Average Latency for batch_update_script_pubkeys_for_block: 0.010 ms
-    2025-03-29T13:37:58.101523Z  INFO titan::index::metrics: Average Latency for index_mempool: 0.472 ms
-    2025-03-29T13:37:58.101531Z  INFO titan::index::metrics: Average Latency for notify_tx_updates: 0.006 ms
-    2025-03-29T13:38:03.106764Z  INFO titan::index::metrics: Average Latency for batch_update_script_pubkeys_for_block: 0.009 ms
-    2025-03-29T13:38:03.106836Z  INFO titan::index::metrics: Average Latency for index_mempool: 0.470 ms
-    2025-03-29T13:38:03.106851Z  INFO titan::index::metrics: Average Latency for notify_tx_updates: 0.006 ms
-    2025-03-29T13:38:08.109888Z  INFO titan::index::metrics: Average Latency for batch_update_script_pubkeys_for_block: 0.008 ms
-    2025-03-29T13:38:08.109967Z  INFO titan::index::metrics: Average Latency for index_mempool: 0.458 ms
-    2025-03-29T13:38:08.109976Z  INFO titan::index::metrics: Average Latency for notify_tx_updates: 0.005 ms
-    ....
-
-
-# Create new Rust project
-
-## Run the Cargo New Command
-
-Use the following command to create a new Rust project named my_project (replace my_project with your desired project name):
-
-***Command:***
 ```bash
-cargo new my_project
-```
-Inside Cargo.toml insert titan-client = "0.1.31"
-
-```toml
-[package]
-name = "my_project"
-version = "0.1.0"
-edition = "2025"
-
-[dependencies]
-titan-client = "0.1.31"
-```
-
-In main.rs insert this:
-
-```rust
-use titan_client::TitanApiBlocking;
-use titan_client::TitanBlockingClient;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a blocking client.
-    let client = TitanBlockingClient::new("http://localhost:3030");
-
-    // Retrieve the indexer status.
-    let status = client.get_status()?;
-    println!("Status: {:?}", status);
-
-    // Retrieve the current block tip.
-    let tip = client.get_tip()?;
-    println!("Block Tip: {:?}", tip);
-
-    // Retrieve address data.
-    let address_data = client.get_address("<YOUR ADDRESS>")?;
-    println!("Address Data: {:?}", address_data);
-
-    Ok(())
-}
+2025-03-29T13:37:48.091391Z  INFO titan::subscription::dispatcher: event_dispatcher started
+2025-03-29T13:37:48.091367Z  INFO titan::subscription::spawn: Spawned subscription tasks (dispatcher + cleanup).
+2025-03-29T13:37:48.091569Z  INFO titan::subscription::tcp_subscription: TCP Subscription Server listening on 127.0.0.1:8080
+2025-03-29T13:37:48.093975Z  INFO titan: Spawned background threads
+2025-03-29T13:37:48.099776Z  INFO titan::server::server: Listening on http://0.0.0.0:3030
+2025-03-29T13:37:53.098638Z  INFO titan::index::metrics: Average Latency for batch_update_script_pubkeys_for_block: 0.016 ms
+2025-03-29T13:37:53.098720Z  INFO titan::index::metrics: Average Latency for index_mempool: 0.535 ms
+2025-03-29T13:37:53.098730Z  INFO titan::index::metrics: Average Latency for notify_tx_updates: 0.007 ms
+2025-03-29T13:37:58.101446Z  INFO titan::index::metrics: Average Latency for batch_update_script_pubkeys_for_block: 0.010 ms
+2025-03-29T13:37:58.101523Z  INFO titan::index::metrics: Average Latency for index_mempool: 0.472 ms
+2025-03-29T13:37:58.101531Z  INFO titan::index::metrics: Average Latency for notify_tx_updates: 0.006 ms
+2025-03-29T13:38:03.106764Z  INFO titan::index::metrics: Average Latency for batch_update_script_pubkeys_for_block: 0.009 ms
+2025-03-29T13:38:03.106836Z  INFO titan::index::metrics: Average Latency for index_mempool: 0.470 ms
+2025-03-29T13:38:03.106851Z  INFO titan::index::metrics: Average Latency for notify_tx_updates: 0.006 ms
+2025-03-29T13:38:08.109888Z  INFO titan::index::metrics: Average Latency for batch_update_script_pubkeys_for_block: 0.008 ms
+2025-03-29T13:38:08.109967Z  INFO titan::index::metrics: Average Latency for index_mempool: 0.458 ms
+2025-03-29T13:38:08.109976Z  INFO titan::index::metrics: Average Latency for notify_tx_updates: 0.005 ms
+....
 ```
 
-The Titan Indexer output shows the TCP Subscription server listening on 127.0.0.1:8080, while the HTTP server listens on http://0.0.0.0:3030.</br> 
-To ensure your project functions correctly, connect the client to a valid address. In the example below, HTTP is used, which is why the client is initialized as:
-
-### Run the project
-
-***Command:***
-```bash
-cargo run
-```
-***Output:***
-
-    Compiling btc-indexer v0.1.0 (/Users/<USER>/Documents/btc/rust-bitcoin-indexer/btc-indexer)
-        Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.31s
-        Running `target/debug/btc-indexer`
-    Status: Status { block_tip: BlockTip { height: 101, hash: "04eae7346938a602cca0319b0a458bd2cebd8a97b129e52bd9fc265318cc8b08" }, runes_count: 0, mempool_tx_count: 0 }
-    Block Tip: BlockTip { height: 101, 
-    hash: "04eae7346938a602cca0319b0a458bd2cebd8a97b129e52bd9fc265318cc8b08" }
-    Address Data: AddressData { value: 505000000000, runes: [], outputs: [AddressTxOut { txid: a173ea6c5b916609d4fea1f461407030237697b4d6dce9a91d4d294be7329e7e, vout: 0, value: 5000000000, runes: [], risky_runes: [], spent: Unspent, status: TransactionStatus { confirmed: true, block_height: Some(38), block_hash: Some(3dbfd76f44e61a67c7f78b5ef29ce5c5315e2d90a14ac4dfa2f5838ab1d36e3b) } }, AddressTxOut { txid: 7bfccb6caec9470a01eeeb541d5907be70013cec840e92287c6c5342954d168c, vout: 0, value: 5000000000, 
-    runes: [], risky_runes: [], spent: Unspent, status: TransactionStatus { confirmed: true, block_height: Some(7), block_hash: Some(4375b37201052c6b33d790a2af8b09e6765d8825770823d56c9deff9bc4b41b5) } }, AddressTxOut { txid: 83f99568eab66ed1d8141e92c32b74a681e45dc7f8910b3b806091b18dc274c6, vout: 0, value: 5000000000, runes: [], risky_runes: [],  ...}...
+The Titan Indexer output shows the **TCP Subscription server listening on 127.0.0.1:8080**, while the **HTTP server listens on http://0.0.0.0:3030**.</br> 
+To ensure your project functions correctly, connect the client to a valid address.
