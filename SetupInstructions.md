@@ -267,7 +267,7 @@ bitcoin-27.0/bin/bitcoin-cli listwallets
 ```bash
 git clone https://github.com/SaturnBTC/Titan.git 
 ```
-### Create data dir
+### Create data dir (optional)
 
 ***Command:***
 ```bash
